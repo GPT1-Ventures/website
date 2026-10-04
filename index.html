@@ -74,8 +74,9 @@ p { margin: 0; }
 
 .btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding-inline: 18px; border-radius: 999px; font-size: 14.5px; font-weight: 500; text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-family: inherit; }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
-.btn.primary:hover { filter: brightness(1.12); }
+.btn { transition: background-color .15s, color .15s, border-color .15s; }
+.btn.primary { background: var(--surface); color: var(--brand); border-color: var(--brand); }
+.btn.primary:hover, .btn.primary:focus-visible { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .btn .arr { transition: transform .2s; }
 .btn:hover .arr { transform: translateX(3px); }
 @media (prefers-reduced-motion: reduce) { .btn .arr { transition: none; } }
@@ -288,11 +289,11 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
 
 /* Highlighted disciplines in the header */
 .pillars { display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0 0; padding: 0; list-style: none; }
-.pillars a { display: inline-flex; align-items: center; gap: 9px; padding: 6px 16px 6px 6px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font: 500 14.5px var(--body); white-space: nowrap; text-decoration: none; box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--brand) 70%, transparent); transition: transform .15s, filter .15s; }
-.pillars a:hover { filter: brightness(1.12); transform: translateY(-1px); }
-.pillars .pi { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--brand-ink) 18%, transparent); }
+.pillars a { display: inline-flex; align-items: center; gap: 9px; padding: 6px 16px 6px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); font: 500 14.5px var(--body); white-space: nowrap; text-decoration: none; transition: background-color .15s; }
+.pillars a:hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.pillars .pi { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); color: var(--accent); }
 .pillars svg { width: 15px; height: 15px; }
-@media (prefers-reduced-motion: reduce) { .pillars a { transition: none; } .pillars a:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pillars a, .btn { transition: none; } }
 
 /* Compact form: two columns on wide screens */
 .cta { grid-template-columns: minmax(0, .75fr) minmax(0, 1.5fr); gap: 40px; padding: 44px; }
