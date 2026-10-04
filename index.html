@@ -504,8 +504,8 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
     function q(type) { return fetch('https://dns.google/resolve?name=' + encodeURIComponent(d) + '&type=' + type, ctl ? { signal: ctl.signal } : {}).then(function (r) { return r.json(); }); }
     return q('MX').then(function (j) {
       if (j.Status === 3) return false;                      // domain does not exist
-      if (j.Answer && j.Answer.length) return true;          // has mail servers
-      return q('A').then(function (k) { return !!(k.Answer && k.Answer.length); });   // no MX: mail can still go to the A record
+      var mx = (j.Answer || []).filter(function (a) { return a.type === 15 && !/^0\s+\.?$/.test(String(a.data).trim()); });
+      return mx.length > 0;                                  // needs at least one real mail server
     }).then(function (ok) { if (to) clearTimeout(to); domainCache[d] = ok; return ok; }).catch(function () { return true; });
   }
 
@@ -542,7 +542,7 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
         if (/\s/.test(v) || !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v) || /\.\./.test(v) || /^\.|\.@|@\./.test(v)) return 'Please enter a valid email address, like name@company.com.';
         var parts = v.split('@'), d = parts[1].toLowerCase(), s = suggestDomain(d);
         if (s && warnedEmail !== v.toLowerCase()) return 'Did you mean ' + parts[0] + '@' + s + '? If your address is correct, click Send again.';
-        if (domainCache[d] === false) return 'That email domain does not seem to exist. Please check it.';
+        if (domainCache[d] === false) return 'That email domain cannot receive mail. Please check the address.';
         return '';
       },
       phone: function (v) {
