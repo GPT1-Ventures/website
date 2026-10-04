@@ -274,6 +274,17 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
 @media (max-width: 560px) { .f-row { grid-template-columns: 1fr; } .form { padding: 20px; } }
 .legal .li { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); }
 .legal .li:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Form validation, phone and location */
+.form .phone { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 8px; }
+.form select { width: 100%; font: 400 15px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 11px 8px; text-overflow: ellipsis; }
+.form select:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+.form small.err { color: #b3261e; font-size: 12.5px; font-weight: 400; line-height: 1.35; }
+.form small.err:empty, .form small.hint:empty { display: none; }
+.form small.hint { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.form input[aria-invalid="true"], .form textarea[aria-invalid="true"], .form select[aria-invalid="true"] { border-color: #b3261e; }
+.form .f-row { align-items: start; }
+.form label { align-content: start; }
 </style>
 </head>
 <body>
@@ -414,15 +425,16 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
       </div>
       <form class="form" id="contact-form" novalidate>
         <div class="f-row">
-          <label for="f-name">Name<input id="f-name" name="name" type="text" autocomplete="name" required></label>
-          <label for="f-email">Email<input id="f-email" name="email" type="email" autocomplete="email" required></label>
+          <label for="f-name">Name<input id="f-name" name="name" type="text" autocomplete="name" required aria-describedby="e-name"><small class="err" id="e-name"></small></label>
+          <label for="f-email">Email<input id="f-email" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" required aria-describedby="e-email"><small class="err" id="e-email"></small></label>
         </div>
-        <div class="f-row">
-          <label for="f-phone">Phone<input id="f-phone" name="phone" type="tel" autocomplete="tel" placeholder="Optional"></label>
-          <label for="f-location">Location<input id="f-location" name="location" type="text" autocomplete="address-level2" placeholder="City, country"></label>
-        </div>
-        <label for="f-building">What are you building?<textarea id="f-building" name="building" rows="3" required placeholder="The company, the stage, who it's for"></textarea></label>
-        <label for="f-help">What help do you need?<textarea id="f-help" name="help" rows="3" required placeholder="Fundraising, go-to-market, brand, partnerships, or something else"></textarea></label>
+        <label for="f-phone">Mobile number
+          <span class="phone"><select id="f-cc" name="cc" aria-label="Country code" autocomplete="off"></select><input id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="Mobile number" required aria-describedby="e-phone"></span>
+          <small class="err" id="e-phone"></small>
+        </label>
+        <label for="f-location">Location<input id="f-location" name="location" type="text" autocomplete="off" placeholder="City, country" required aria-describedby="e-location h-location"><small class="hint" id="h-location"></small><small class="err" id="e-location"></small></label>
+        <label for="f-building">What are you building?<textarea id="f-building" name="building" rows="3" required placeholder="The company, the stage, who it's for" aria-describedby="e-building"></textarea><small class="err" id="e-building"></small></label>
+        <label for="f-help">What help do you need?<textarea id="f-help" name="help" rows="3" required placeholder="Fundraising, go-to-market, brand, partnerships, or something else" aria-describedby="e-help"></textarea><small class="err" id="e-help"></small></label>
         <input type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
         <button class="send" id="f-send" type="submit">Send message <span aria-hidden="true">→</span></button>
         <p class="f-status" id="f-status" role="status" aria-live="polite"></p>
@@ -448,6 +460,7 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
 
 <script>
 (function () {
+  try {
   // Growth curve: area fill and inflection marks placed along the drawn path
   var NS = 'http://www.w3.org/2000/svg', path = document.getElementById('c-path');
   document.getElementById('c-area').setAttribute('d', path.getAttribute('d') + ' L430,270 L30,270 Z');
@@ -465,27 +478,90 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
     marks.appendChild(g);
     var c = document.createElementNS(NS, 'circle'); c.setAttribute('class', 'c-dot'); c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 6); marks.appendChild(c);
   });
+  } catch (e) {}
 
-  // Contact form: posts to FormSubmit, which emails the message to the inbox below
+  // Contact form: validation, country code, location prefill, then post to FormSubmit (emails the inbox below)
   var ENDPOINT = 'https://formsubmit.co/ajax/mahesh@gpt1ventures.com';
+  var COUNTRIES = [['IN','India','91'],['US','United States','1'],['GB','United Kingdom','44'],['AE','UAE','971'],['SG','Singapore','65'],['CA','Canada','1'],['AU','Australia','61'],['DE','Germany','49'],['FR','France','33'],['NL','Netherlands','31'],['IE','Ireland','353'],['CH','Switzerland','41'],['SE','Sweden','46'],['ES','Spain','34'],['IT','Italy','39'],['JP','Japan','81'],['KR','South Korea','82'],['CN','China','86'],['HK','Hong Kong','852'],['ID','Indonesia','62'],['MY','Malaysia','60'],['TH','Thailand','66'],['PH','Philippines','63'],['VN','Vietnam','84'],['SA','Saudi Arabia','966'],['QA','Qatar','974'],['KW','Kuwait','965'],['BH','Bahrain','973'],['OM','Oman','968'],['IL','Israel','972'],['TR','Turkey','90'],['ZA','South Africa','27'],['NG','Nigeria','234'],['KE','Kenya','254'],['EG','Egypt','20'],['BR','Brazil','55'],['MX','Mexico','52'],['AR','Argentina','54'],['NZ','New Zealand','64'],['PK','Pakistan','92'],['BD','Bangladesh','880'],['LK','Sri Lanka','94'],['NP','Nepal','977'],['RU','Russia','7'],['PL','Poland','48'],['PT','Portugal','351'],['BE','Belgium','32'],['AT','Austria','43'],['DK','Denmark','45'],['NO','Norway','47'],['FI','Finland','358']];
+  var TZ = { 'Asia/Kolkata': 'IN', 'Asia/Calcutta': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US', 'America/Los_Angeles': 'US', 'America/Phoenix': 'US', 'America/Toronto': 'CA', 'America/Vancouver': 'CA', 'Europe/London': 'GB', 'Europe/Dublin': 'IE', 'Asia/Dubai': 'AE', 'Asia/Singapore': 'SG', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Asia/Tokyo': 'JP', 'Asia/Hong_Kong': 'HK' };
+  var TYPOS = { 'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gmail.con': 'gmail.com', 'gmail.co': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmail.con': 'hotmail.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com' };
   var form = document.getElementById('contact-form'), status = document.getElementById('f-status'), send = document.getElementById('f-send');
-  if (form) form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var bad = [];
-    ['name', 'email', 'building', 'help'].forEach(function (n) {
-      var el = form.elements[n], v = (el.value || '').trim(), ok = v && (n !== 'email' || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v));
-      el.setAttribute('aria-invalid', ok ? 'false' : 'true'); if (!ok) bad.push(el);
+  if (form) {
+    var cc = form.elements.cc, touched = {}, ccTouched = false, locTouched = false, geoStarted = false;
+    COUNTRIES.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.textContent = c[1] + ' (+' + c[2] + ')'; cc.appendChild(o); });
+    function dial(iso) { for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i][0] === iso) return COUNTRIES[i][2]; return '91'; }
+    function setCountry(iso) { for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i][0] === iso) { cc.value = iso; return true; } return false; }
+    var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    setCountry(TZ[tz] || 'IN');
+    cc.addEventListener('change', function () { ccTouched = true; validate('phone'); });
+    form.elements.location.addEventListener('input', function () { locTouched = true; form.elements.location.removeAttribute('data-auto'); document.getElementById('h-location').textContent = ''; });
+
+    // Location prefill from the visitor's connection, started when they first touch the form
+    function geo() {
+      if (geoStarted) return; geoStarted = true;
+      var ctl = ('AbortController' in window) ? new AbortController() : null, to = ctl && setTimeout(function () { ctl.abort(); }, 4000);
+      fetch('https://get.geojs.io/v1/ip/geo.json', ctl ? { signal: ctl.signal } : {}).then(function (r) { return r.json(); }).then(function (g) {
+        if (to) clearTimeout(to);
+        var loc = form.elements.location;
+        if (!locTouched && !loc.value && g && g.city && g.country) {
+          loc.value = g.city + ', ' + g.country; loc.setAttribute('data-auto', '1');
+          document.getElementById('h-location').textContent = 'Filled in from your connection. Please correct it if it is wrong.';
+        }
+        if (!ccTouched && g && g.country_code) setCountry(g.country_code);
+      }).catch(function () {});
+    }
+    form.addEventListener('focusin', geo);
+
+    var RULES = {
+      name: function (v) { return v.length >= 2 && /[A-Za-zÀ-ɏऀ-ॿ]/.test(v) ? '' : 'Please enter your name.'; },
+      email: function (v) {
+        if (!v) return 'Please enter your email address.';
+        if (/\s/.test(v) || !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v) || /\.\./.test(v) || /^\.|\.@|@\./.test(v)) return 'Please enter a valid email address, like name@company.com.';
+        var d = v.split('@')[1].toLowerCase(); if (TYPOS[d]) return 'Did you mean ' + v.split('@')[0] + '@' + TYPOS[d] + '?';
+        return '';
+      },
+      phone: function (v) {
+        var d = v.replace(/[\s\-().]/g, '');
+        if (!d) return 'Please enter your mobile number.';
+        if (/^\+/.test(d)) return 'Choose your country code above and enter the number without it.';
+        if (!/^\d+$/.test(d)) return 'Use digits only.';
+        var iso = cc.value; d = d.replace(/^0+/, '');
+        if (iso === 'IN') return /^[6-9]\d{9}$/.test(d) ? '' : 'Enter a valid 10-digit Indian mobile number.';
+        if (iso === 'US' || iso === 'CA') return /^\d{10}$/.test(d) ? '' : 'Enter a valid 10-digit phone number.';
+        return d.length >= 6 && d.length <= 14 ? '' : 'Enter a valid phone number for the selected country.';
+      },
+      location: function (v) { return v.length >= 2 ? '' : 'Please tell us where you are based.'; },
+      building: function (v) { return v.length >= 5 ? '' : 'Please tell us a little about what you are building.'; },
+      help: function (v) { return v.length >= 5 ? '' : 'Please tell us what help you need.'; }
+    };
+    function validate(n) {
+      var el = form.elements[n], msg = RULES[n]((el.value || '').trim());
+      document.getElementById('e-' + n).textContent = msg; el.setAttribute('aria-invalid', msg ? 'true' : 'false');
+      return !msg;
+    }
+    Object.keys(RULES).forEach(function (n) {
+      var el = form.elements[n];
+      el.addEventListener('blur', function () { touched[n] = true; validate(n); });
+      el.addEventListener('input', function () { if (touched[n]) validate(n); });
     });
-    status.className = 'f-status';
-    if (bad.length) { status.textContent = 'Please fill in the highlighted fields.'; status.classList.add('err'); bad[0].focus(); return; }
-    var data = { _subject: 'New enquiry from gpt1ventures.com', _template: 'table', _captcha: 'false', _honey: form.elements._honey.value };
-    ['name', 'email', 'phone', 'location', 'building', 'help'].forEach(function (n) { data[n] = form.elements[n].value.trim(); });
-    send.disabled = true; send.firstChild.textContent = 'Sending… ';
-    fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(data) })
-      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || j.success === 'false' || j.success === false) throw new Error('send failed'); }); })
-      .then(function () { form.classList.add('sent'); status.className = 'f-status ok'; status.textContent = 'Thank you. Your message is in, and we will be in touch soon.'; form.reset(); })
-      .catch(function () { send.disabled = false; send.firstChild.textContent = 'Send message '; status.className = 'f-status err'; status.textContent = 'Something went wrong sending that. Please email mahesh@gpt1ventures.com directly.'; });
-  });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      status.className = 'f-status';
+      var first = null; Object.keys(RULES).forEach(function (n) { touched[n] = true; if (!validate(n) && !first) first = form.elements[n]; });
+      if (first) { status.textContent = 'Please fix the highlighted fields.'; status.classList.add('err'); first.focus(); return; }
+      status.textContent = '';
+      var data = { _subject: 'New enquiry from gpt1ventures.com', _template: 'table', _captcha: 'false', _honey: form.elements._honey.value };
+      ['name', 'email', 'location', 'building', 'help'].forEach(function (n) { data[n] = form.elements[n].value.trim(); });
+      data.email = data.email.toLowerCase();
+      data.phone = '+' + dial(cc.value) + ' ' + form.elements.phone.value.trim().replace(/^0+/, '');
+      send.disabled = true; send.firstChild.textContent = 'Sending… ';
+      fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(data) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || j.success === 'false' || j.success === false) { if (window.console) console.warn('Form service said:', j.message || r.status); throw new Error('send failed'); } }); })
+        .then(function () { form.classList.add('sent'); status.className = 'f-status ok'; status.textContent = 'Thank you. Your message is in, and we will be in touch soon.'; })
+        .catch(function () { send.disabled = false; send.firstChild.textContent = 'Send message '; status.className = 'f-status err'; status.textContent = 'Something went wrong sending that. Please email mahesh@gpt1ventures.com directly.'; });
+    });
+  }
 })();
 </script>
 </body>
