@@ -484,19 +484,42 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
   var ENDPOINT = 'https://formsubmit.co/ajax/mahesh@gpt1ventures.com';
   var COUNTRIES = [['IN','India','91'],['US','United States','1'],['GB','United Kingdom','44'],['AE','UAE','971'],['SG','Singapore','65'],['CA','Canada','1'],['AU','Australia','61'],['DE','Germany','49'],['FR','France','33'],['NL','Netherlands','31'],['IE','Ireland','353'],['CH','Switzerland','41'],['SE','Sweden','46'],['ES','Spain','34'],['IT','Italy','39'],['JP','Japan','81'],['KR','South Korea','82'],['CN','China','86'],['HK','Hong Kong','852'],['ID','Indonesia','62'],['MY','Malaysia','60'],['TH','Thailand','66'],['PH','Philippines','63'],['VN','Vietnam','84'],['SA','Saudi Arabia','966'],['QA','Qatar','974'],['KW','Kuwait','965'],['BH','Bahrain','973'],['OM','Oman','968'],['IL','Israel','972'],['TR','Turkey','90'],['ZA','South Africa','27'],['NG','Nigeria','234'],['KE','Kenya','254'],['EG','Egypt','20'],['BR','Brazil','55'],['MX','Mexico','52'],['AR','Argentina','54'],['NZ','New Zealand','64'],['PK','Pakistan','92'],['BD','Bangladesh','880'],['LK','Sri Lanka','94'],['NP','Nepal','977'],['RU','Russia','7'],['PL','Poland','48'],['PT','Portugal','351'],['BE','Belgium','32'],['AT','Austria','43'],['DK','Denmark','45'],['NO','Norway','47'],['FI','Finland','358']];
   var TZ = { 'Asia/Kolkata': 'IN', 'Asia/Calcutta': 'IN', 'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US', 'America/Los_Angeles': 'US', 'America/Phoenix': 'US', 'America/Toronto': 'CA', 'America/Vancouver': 'CA', 'Europe/London': 'GB', 'Europe/Dublin': 'IE', 'Asia/Dubai': 'AE', 'Asia/Singapore': 'SG', 'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Europe/Berlin': 'DE', 'Europe/Paris': 'FR', 'Asia/Tokyo': 'JP', 'Asia/Hong_Kong': 'HK' };
-  var TYPOS = { 'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gmail.con': 'gmail.com', 'gmail.co': 'gmail.com', 'hotmial.com': 'hotmail.com', 'hotmail.con': 'hotmail.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'outlok.com': 'outlook.com', 'outlook.con': 'outlook.com' };
+  var COMMON = ['gmail.com', 'yahoo.com', 'yahoo.in', 'hotmail.com', 'outlook.com', 'icloud.com', 'rediffmail.com', 'live.com', 'protonmail.com'];
+  var KNOWN = COMMON.concat(['googlemail.com', 'ymail.com', 'mail.com', 'email.com', 'gmx.com', 'aol.com', 'me.com', 'msn.com', 'pm.me', 'proton.me', 'zoho.com', 'yandex.com', 'hey.com', 'fastmail.com', 'yahoo.co.in', 'yahoo.co.uk', 'outlook.in', 'hotmail.co.uk']);
+  function lev(a, b) { var m = [], i, j; for (i = 0; i <= a.length; i++) m[i] = [i]; for (j = 1; j <= b.length; j++) m[0][j] = j;
+    for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i-1][j] + 1, m[i][j-1] + 1, m[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)); return m[a.length][b.length]; }
+  function suggestDomain(d) {
+    if (KNOWN.indexOf(d) > -1) return '';
+    var best = '', bd = 3;
+    COMMON.forEach(function (c) { var x = lev(d, c); if (x < bd) { bd = x; best = c; } });
+    if (best) return best;
+    var fix = d.replace(/\.(con|cim|vom|xom|comm|cm|ocm)$/, '.com'); return fix !== d ? fix : '';
+  }
+  var domainCache = {};
+  function domainOk(email) {   // asks a public DNS service whether the email domain can receive mail; never blocks on errors
+    var d = (email.split('@')[1] || '').toLowerCase();
+    if (!d || domainCache[d] !== undefined) return Promise.resolve(domainCache[d] !== false);
+    if (!('fetch' in window)) return Promise.resolve(true);
+    var ctl = ('AbortController' in window) ? new AbortController() : null, to = ctl && setTimeout(function () { ctl.abort(); }, 3500);
+    function q(type) { return fetch('https://dns.google/resolve?name=' + encodeURIComponent(d) + '&type=' + type, ctl ? { signal: ctl.signal } : {}).then(function (r) { return r.json(); }); }
+    return q('MX').then(function (j) {
+      if (j.Status === 3) return false;                      // domain does not exist
+      if (j.Answer && j.Answer.length) return true;          // has mail servers
+      return q('A').then(function (k) { return !!(k.Answer && k.Answer.length); });   // no MX: mail can still go to the A record
+    }).then(function (ok) { if (to) clearTimeout(to); domainCache[d] = ok; return ok; }).catch(function () { return true; });
+  }
+
   var form = document.getElementById('contact-form'), status = document.getElementById('f-status'), send = document.getElementById('f-send');
   if (form) {
-    var cc = form.elements.cc, touched = {}, ccTouched = false, locTouched = false, geoStarted = false;
+    var cc = form.elements.cc, touched = {}, ccTouched = false, locTouched = false, geoStarted = false, warnedEmail = '';
     COUNTRIES.forEach(function (c) { var o = document.createElement('option'); o.value = c[0]; o.textContent = c[1] + ' (+' + c[2] + ')'; cc.appendChild(o); });
     function dial(iso) { for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i][0] === iso) return COUNTRIES[i][2]; return '91'; }
     function setCountry(iso) { for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i][0] === iso) { cc.value = iso; return true; } return false; }
     var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
     setCountry(TZ[tz] || 'IN');
     cc.addEventListener('change', function () { ccTouched = true; validate('phone'); });
-    form.elements.location.addEventListener('input', function () { locTouched = true; form.elements.location.removeAttribute('data-auto'); document.getElementById('h-location').textContent = ''; });
+    form.elements.location.addEventListener('input', function () { locTouched = true; document.getElementById('h-location').textContent = ''; });
 
-    // Location prefill from the visitor's connection, started when they first touch the form
     function geo() {
       if (geoStarted) return; geoStarted = true;
       var ctl = ('AbortController' in window) ? new AbortController() : null, to = ctl && setTimeout(function () { ctl.abort(); }, 4000);
@@ -504,7 +527,7 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
         if (to) clearTimeout(to);
         var loc = form.elements.location;
         if (!locTouched && !loc.value && g && g.city && g.country) {
-          loc.value = g.city + ', ' + g.country; loc.setAttribute('data-auto', '1');
+          loc.value = g.city + ', ' + g.country;
           document.getElementById('h-location').textContent = 'Filled in from your connection. Please correct it if it is wrong.';
         }
         if (!ccTouched && g && g.country_code) setCountry(g.country_code);
@@ -517,7 +540,9 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
       email: function (v) {
         if (!v) return 'Please enter your email address.';
         if (/\s/.test(v) || !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v) || /\.\./.test(v) || /^\.|\.@|@\./.test(v)) return 'Please enter a valid email address, like name@company.com.';
-        var d = v.split('@')[1].toLowerCase(); if (TYPOS[d]) return 'Did you mean ' + v.split('@')[0] + '@' + TYPOS[d] + '?';
+        var parts = v.split('@'), d = parts[1].toLowerCase(), s = suggestDomain(d);
+        if (s && warnedEmail !== v.toLowerCase()) return 'Did you mean ' + parts[0] + '@' + s + '? If your address is correct, click Send again.';
+        if (domainCache[d] === false) return 'That email domain does not seem to exist. Please check it.';
         return '';
       },
       phone: function (v) {
@@ -541,25 +566,36 @@ footer .about { color: var(--muted); font-size: 14px; max-width: 34ch; margin-to
     }
     Object.keys(RULES).forEach(function (n) {
       var el = form.elements[n];
-      el.addEventListener('blur', function () { touched[n] = true; validate(n); });
+      el.addEventListener('blur', function () {
+        touched[n] = true;
+        if (validate(n) && n === 'email') domainOk(el.value.trim()).then(function () { validate('email'); });
+      });
       el.addEventListener('input', function () { if (touched[n]) validate(n); });
     });
 
+    function resetBtn() { send.disabled = false; send.firstChild.textContent = 'Send message '; }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      status.className = 'f-status';
-      var first = null; Object.keys(RULES).forEach(function (n) { touched[n] = true; if (!validate(n) && !first) first = form.elements[n]; });
-      if (first) { status.textContent = 'Please fix the highlighted fields.'; status.classList.add('err'); first.focus(); return; }
-      status.textContent = '';
-      var data = { _subject: 'New enquiry from gpt1ventures.com', _template: 'table', _captcha: 'false', _honey: form.elements._honey.value };
-      ['name', 'email', 'location', 'building', 'help'].forEach(function (n) { data[n] = form.elements[n].value.trim(); });
-      data.email = data.email.toLowerCase();
-      data.phone = '+' + dial(cc.value) + ' ' + form.elements.phone.value.trim().replace(/^0+/, '');
-      send.disabled = true; send.firstChild.textContent = 'Sending… ';
-      fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(data) })
-        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || j.success === 'false' || j.success === false) { if (window.console) console.warn('Form service said:', j.message || r.status); throw new Error('send failed'); } }); })
-        .then(function () { form.classList.add('sent'); status.className = 'f-status ok'; status.textContent = 'Thank you. Your message is in, and we will be in touch soon.'; })
-        .catch(function () { send.disabled = false; send.firstChild.textContent = 'Send message '; status.className = 'f-status err'; status.textContent = 'Something went wrong sending that. Please email mahesh@gpt1ventures.com directly.'; });
+      status.className = 'f-status'; status.textContent = '';
+      var first = null;
+      Object.keys(RULES).forEach(function (n) { touched[n] = true; if (!validate(n) && !first) first = form.elements[n]; });
+      if (first) {
+        var em = form.elements.email, v = em.value.trim().toLowerCase();
+        if (document.getElementById('e-email').textContent.indexOf('Did you mean') === 0) warnedEmail = v;   // a second click accepts it
+        status.textContent = 'Please fix the highlighted fields.'; status.classList.add('err'); first.focus(); return;
+      }
+      send.disabled = true; send.firstChild.textContent = 'Checking… ';
+      domainOk(form.elements.email.value.trim()).then(function (ok) {
+        if (!ok) { resetBtn(); validate('email'); status.textContent = 'Please fix the highlighted fields.'; status.classList.add('err'); form.elements.email.focus(); return; }
+        send.firstChild.textContent = 'Sending… ';
+        var data = { _subject: 'New enquiry from gpt1ventures.com', _template: 'table', _captcha: 'false', _honey: form.elements._honey.value };
+        ['name', 'email', 'location', 'building', 'help'].forEach(function (n) { data[n] = form.elements[n].value.trim(); });
+        data.email = data.email.toLowerCase();
+        data.phone = '+' + dial(cc.value) + ' ' + form.elements.phone.value.trim().replace(/^0+/, '');
+        return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(data) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || j.success === 'false' || j.success === false) { if (window.console) console.warn('Form service said:', j.message || r.status); throw new Error('send failed'); } }); })
+          .then(function () { form.classList.add('sent'); status.className = 'f-status ok'; status.textContent = 'Thank you. Your message is in, and we will be in touch soon.'; });
+      }).catch(function () { resetBtn(); status.className = 'f-status err'; status.textContent = 'Something went wrong sending that. Please email mahesh@gpt1ventures.com directly.'; });
     });
   }
 })();
